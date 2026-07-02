@@ -25,4 +25,4 @@ data/cola/
 Thumbs.db
 
 .vscode/
-.idea/test_images/
+test_images/
