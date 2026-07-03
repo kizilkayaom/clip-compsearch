@@ -35,3 +35,6 @@ for i, text in enumerate(texts):
     print(f"\n'{text}':")
     for rank, idx in enumerate(topk.indices[i]):
         print(f"  {rank+1}. {image_paths[idx]} (score: {topk.values[i][rank]:.3f})")
+
+# Save embeddings
+torch.save(image_features, 'embeddings/image_embeddings.pt')
