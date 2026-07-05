@@ -33,3 +33,6 @@
   | add_obj     |  2062 |   77.0%  |  23.0%  |
   | replace_att |   788 |   80.3%  |  19.7%  |
   | replace_obj |  1652 |   90.7%  |   9.3%  |
+
+## Day 4 - Jul 5, 2026
+- Built and verified Recall@K harness
