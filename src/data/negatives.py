@@ -1,4 +1,9 @@
 import spacy
+import numpy as np
+from sentence_transformers import CrossEncoder
+
+
+model = CrossEncoder("cross-encoder/nli-deberta-v3-small")
 
 nlp = spacy.load("en_core_web_sm")
 
@@ -71,3 +76,10 @@ def swap_attributes(nlp, caption):
             words[index_2] = words[index_2].lower()
         
     return " ".join(words)
+
+def nli_filter(original, negative) -> bool:
+    scores = model.predict((original, negative))
+    if np.argmax(scores) == 1:
+        return False
+    return True
+
