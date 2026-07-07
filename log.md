@@ -36,3 +36,7 @@
 
 ## Day 4 - Jul 5, 2026
 - Built and verified Recall@K harness
+
+## Day 5 - Jul 7, 2026
+- Built NLI filter using cross-encoder/nli-deberta-v3-small
+- Cached 5000 COCO val2017 vision embeddings
