@@ -1,9 +1,10 @@
-import json, torch
+import json, torch, os
 import torch.nn.functional as F
 from transformers import CLIPModel
 from peft import LoraConfig, get_peft_model
 from src.data import negatives
 from src.search import engine
+from src.eval.matching import print_table
 
 model, processor = engine.load_model("openai/clip-vit-base-patch32")
 
@@ -73,3 +74,6 @@ for epoch in range(epochs):
     print(f"--- Epoch {epoch} avg loss: {epoch_loss/batch_count:.4f} ---")
 
 model.text_model.save_pretrained("checkpoints/lora_epoch5")
+
+print("\n--- Post-training evaluation ---")
+print_table(model, processor)

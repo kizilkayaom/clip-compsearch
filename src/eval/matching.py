@@ -2,9 +2,7 @@ import os, json, torch
 from PIL import Image
 from src.search import engine
 
-model, processor = engine.load_model("openai/clip-vit-base-patch32")
-
-def evaluate_file(json_path):
+def evaluate_file(model, processor, json_path):
     with open(json_path, 'r', encoding='utf-8') as file:
         data_dictionary = json.load(file)
 
@@ -39,16 +37,21 @@ def evaluate_file(json_path):
 
     return total, correct / total
 
-rows = []
-for json_file in sorted(os.listdir("data/sugarcrepe/")):
-    path = f"data/sugarcrepe/{json_file}"
-    category = os.path.splitext(json_file)[0]
-    total, accuracy = evaluate_file(path)
-    rows.append((category, total, accuracy))
+def print_table(model, processor):
+    rows = []
+    for json_file in sorted(os.listdir("data/sugarcrepe/")):
+        path = f"data/sugarcrepe/{json_file}"
+        category = os.path.splitext(json_file)[0]
+        total, accuracy = evaluate_file(model, processor, path)
+        rows.append((category, total, accuracy))
 
-header = ("Category", "Total", "Accuracy")
-col_width = max(len(header[0]), *(len(r[0]) for r in rows))
-print(f"{header[0]:<{col_width}} | {header[1]:>6} | {header[2]:>8}")
-print(f"{'-' * col_width}-+-{'-' * 6}-+-{'-' * 8}")
-for category, total, accuracy in rows:
-    print(f"{category:<{col_width}} | {total:>6} | {accuracy:>8.3f}")
+    header = ("Category", "Total", "Accuracy")
+    col_width = max(len(header[0]), *(len(r[0]) for r in rows))
+    print(f"{header[0]:<{col_width}} | {header[1]:>6} | {header[2]:>8}")
+    print(f"{'-' * col_width}-+-{'-' * 6}-+-{'-' * 8}")
+    for category, total, accuracy in rows:
+        print(f"{category:<{col_width}} | {total:>6} | {accuracy:>8.3f}")
+
+if __name__ == "__main__":
+    model, processor = engine.load_model("openai/clip-vit-base-patch32")
+    print_table(model, processor)
