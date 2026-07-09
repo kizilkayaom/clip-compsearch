@@ -103,3 +103,15 @@ The captions where `swap_objects` returned the original string unchanged (where 
 | R@10   |   0.944   |   0.952    | +0.8pp |
 
 The results suggest that the retrieval is preversed under noise. Additionally, the fine-tuning process improves the conditional accuracy without degrading the standard search.
+
+### Hyperparameter sweep summary
+| Config              | swap_obj | swap_att | add_obj | Overall trend |
+|---------------------|----------|----------|---------|---------------|
+| lr=1e-5, 5 epochs   |   68.6%  |   71.5%  |  89.3%  | **overall best**      |
+| lr=1e-5, 10 epochs  |   66.1%  |   69.5%  |  82.4%  | overfitting       |
+| lr=5e-5, 5 epochs   |   70.2%  |   69.5%  |  80.7%  | overfitting       |
+
+Final model: lr=1e-5, 5 epochs, noun+adj swap + NLI filter
+
+## Day 7 - Jul 8, 2026
+- The project is now completed: I have finished the training script, wrote the Gradio app's script, tested a few of the results, documented the findings, and updated README.

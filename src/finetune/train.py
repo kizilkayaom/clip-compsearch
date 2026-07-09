@@ -24,8 +24,14 @@ def infonce_loss(image_embed, text_embed, temp):
     targets = torch.arange(len(l2_images))
     return F.cross_entropy(sim_scaled, targets)
 
-image_embed = torch.load("embeddings/coco_val_embeddings.pt")
-with open("embeddings/coco_val_captions.json", 'r') as f:
+def generate_negative(nlp, caption):
+    neg = negatives.swap_objects(nlp, caption)
+    if neg == caption:
+        neg = negatives.swap_attributes(nlp, caption)
+    return neg
+
+image_embed = torch.load("embeddings/demo_gallery_embeddings.pt")
+with open("embeddings/demo_gallery_filenames.json", 'r') as f:
     captions = json.load(f)
 
 optimizer = torch.optim.AdamW(model.text_model.parameters(), lr=1e-5)
@@ -39,7 +45,8 @@ for epoch in range(epochs):
     for i in range(0, len(image_embed), batch_size):
         batch_images = image_embed[i:i+batch_size]
         batch_captions = captions[i:i+batch_size]
-        batch_negatives = [negatives.swap_objects(negatives.nlp, cap) for cap in batch_captions]
+        batch_negatives = [generate_negative(negatives.nlp, cap) for cap in batch_captions]
+        batch_negatives = [neg if negatives.nli_filter(cap, neg) else cap for cap, neg in zip(batch_captions, batch_negatives)]
 
         valid = [(img, pos, neg) for img, pos, neg in
                  zip(batch_images, batch_captions, batch_negatives) if pos != neg]

@@ -13,7 +13,6 @@ __pycache__/
 *.npy
 embeddings/
 
-checkpoints/
 
 data/coco/
 data/flickr30k/
