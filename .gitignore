@@ -4,6 +4,8 @@ __pycache__/
 .venv/
 *.egg-info/
 checkpoints/lora_epoch5/*.md
+docs/
+../
 
 *.pt
 *.pth
@@ -28,3 +30,7 @@ Thumbs.db
 test_images/
 data/coco/
 data/sugarcrepe/
+
+annotations/
+train2017/
+val2017/
