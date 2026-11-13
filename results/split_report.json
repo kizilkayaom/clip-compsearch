@@ -1,0 +1,20 @@
+{
+  "seed": 0,
+  "train": {
+    "images": 113287,
+    "captions": 566741,
+    "sha256": "5536ccde672d88e3472b7b10f990b875fa70592c50af8a10fe5f2a37d504082a"
+  },
+  "val": {
+    "images": 5000,
+    "captions": 25012,
+    "sha256": "8132b5c37429b8a061d6b57b9ad9a54e01293c0ca69a06a364c08120a2e22268"
+  },
+  "test": {
+    "images": 5000,
+    "captions": 25014,
+    "sha256": "8d78e74291041d6273c66797114f7c1672dc6c05661225026ff2f569d5f45c39"
+  },
+  "git_commit": "2fd74cfc50eb7566b85643ae05fc0756f1eac961",
+  "git_dirty": false
+}
