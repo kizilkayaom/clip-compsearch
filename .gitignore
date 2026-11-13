@@ -4,7 +4,8 @@ __pycache__/
 .venv/
 *.egg-info/
 checkpoints/lora_epoch5/*.md
-docs/
+docs/*
+!docs/decisions.md
 ../
 
 *.pt
@@ -34,3 +35,4 @@ data/sugarcrepe/
 annotations/
 train2017/
 val2017/
+data/negatives/
