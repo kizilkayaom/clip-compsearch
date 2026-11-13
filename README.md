@@ -12,7 +12,7 @@ CLIP-based image search treats queries like a bag of words, which means that it 
 
 ## The Fix
 
-In order to fix this, I have fine-tuned  the CLIP's text encoder with LoRA using composition-aware hard negatives. This process is automated with a swap function supporting noun and adjective swaps, and used natural language inference (NLI) for filtering. However, CLIP's vision encoder is not updated, and only non-vision encoding parameters (0.62% of the total params.) were trained.
+In order to fix this, I have fine-tuned  the CLIP's text encoder with LoRA using composition-aware hard negatives. This process is automated with a swap function supporting noun and adjective swaps, and a rule filter that removes swaps that keep the meaning (see [Why a rule filter replaces NLI](#why-a-rule-filter-replaces-nli)). However, CLIP's vision encoder is not updated, and only non-vision encoding parameters (0.62% of the total params.) were trained.
 
 ## Results
 
@@ -132,12 +132,21 @@ In the demo, I have included a **Search** tab for gallery retrieval and a **Matc
 ## Methodology
 
 1. Encode COCO val2017 images with frozen CLIP vision encoder (cached once)
-2. Generate hard negatives via spaCy POS-swaps (nouns, adjectives) + NLI filter
+2. Generate hard negatives via spaCy POS-swaps (nouns, adjectives) + a rule filter for symmetric swaps
 3. Attach LoRA adapters (with parameters r=16, α=32) to the text encoder's query and value projections (q_proj, v_proj)
 4. Train the model with InfoNCE contrastive loss so that each image prefers its caption over both random in-batch texts and its constructed hard negative
 5. Evaluate on SugarCrepe (for compositional accuracy) and Recall@K (for retrieval)
 
 All of the testing scripts are available under `notebooks/`
+
+### Why a rule filter replaces NLI
+
+The first version filtered the swaps with an NLI model (`cross-encoder/nli-deberta-v3-small`) and removed every pair labelled as entailment. A check on 2,000 COCO train2017 captions showed two problems:
+
+- **It removed real negatives.** The model labelled 1,033 of 1,984 swap negatives (52%) as entailment. Many of them change the meaning, for example "A man in a crown wears a red jacket and is on the phone." → "A crown in a man wears a red jacket and is on the phone." A swap keeps every word of the caption, and NLI models tend to predict entailment when the premise and the hypothesis share their words (McCoy et al., 2019).
+- **It kept swaps that keep the meaning.** It labelled "A dog and a cat sit on a sofa." → "A cat and a dog sit on a sofa." as contradiction.
+
+The rule filter rejects a swap when the two swapped units are joined by "and" or "or", or by a symmetric relation: next to, beside, near, by, alongside, across from, opposite. The NLI scores are still stored with each pair, but they are not used for filtering.
 
 ## Training Configuration
 
@@ -189,6 +198,7 @@ clip-compsearch/
 - Hsieh et al., [SugarCrepe: Fixing Hackable Benchmarks for Vision-Language Compositionality](https://arxiv.org/abs/2306.14610)
 - Hu et al., [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685)
 - Lin et al., [Microsoft COCO: Common Objects in Context](https://arxiv.org/abs/1405.0312)
+- McCoy et al., [Right for the Wrong Reasons: Diagnosing Syntactic Heuristics in Natural Language Inference](https://arxiv.org/abs/1902.01007)
 
 ## Acknowledgements
 - [COCO Dataset](https://cocodataset.org/) — CC-BY 4.0
