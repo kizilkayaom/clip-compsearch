@@ -33,6 +33,17 @@ Each entry records a choice made before any test-set evaluation.
 | Labelling | Add a `break_type` column: "article or number", "word order", "other" | Shows whether the unfixed plural agreement passes the 3% limit. |
 | Reproducibility hash | Report `pairs_sha256` over image_id, caption_id, caption, negative and swap_type, next to the file `sha256` | Rounded NLI scores differ between MPS and CPU (8 of 150 pairs) and between batch sizes (4 of 150), so the file hash does not reproduce on another device. |
 
+## Step 5: Image embeddings (14 Nov 2026)
+
+| Decision | Choice | Reason |
+|---|---|---|
+| Location | Local Mac (Apple M4, MPS) | Measured about 143 images/s, so about 15 minutes for 123,287 images. No 18 GB upload. |
+| Feature | `get_image_features(...).pooler_output`, not normalized, float32 | In transformers 5.12.1 this equals `visual_projection(vision_model(...).pooler_output)` (tested). One function in `src/features.py` for caching, training and evaluation. |
+| Preprocessing | PIL `convert("RGB")`, then `CLIPProcessor` | 10 val2017 images are not RGB. |
+| File format | 1 file per set: `image_ids` and `features` in the same `.pt` file | The rows and IDs cannot drift apart. |
+| Sanity check | 100 seeded images per set, recomputed on CPU with batch size 1; tolerance 1e-4 max abs difference | Measured MPS vs CPU difference: up to 3.4e-05 on norms of 9.2–11.6. A swapped row gives a difference above 1e-2 (tested). |
+| Parallelism | 8 threads in the main process, with prefetch of the next batch | DataLoader worker processes ran at 33–57 images/s on macOS, against 132–143 images/s with threads. |
+
 ## Open decisions
 
 - Selection rule (step 6)
