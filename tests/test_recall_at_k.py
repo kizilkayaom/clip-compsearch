@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from src.eval.recall_at_k import caption_ranks, recall_at_k
+from src.eval.recall_at_k import caption_ranks, image_ranks, recall_at_k
 
 IMAGE_IDS = [10, 20, 30]
 IMAGES = torch.eye(3)
@@ -68,3 +68,28 @@ def test_caption_ranks_reject_unknown_image_id() -> None:
 def test_caption_ranks_reject_length_mismatch() -> None:
     with pytest.raises(ValueError):
         caption_ranks(TEXTS, IMAGES, CAPTION_IMAGE_IDS[:2], IMAGE_IDS)
+
+
+def test_image_ranks_use_the_best_ranked_caption_of_each_image() -> None:
+    ranks = image_ranks(TEXTS, IMAGES, CAPTION_IMAGE_IDS, IMAGE_IDS)
+
+    assert ranks.tolist() == [0, 0, 0]
+
+
+def test_image_ranks_count_other_images_captions_above_the_best_true_one() -> None:
+    texts = torch.tensor([[0.6, 0.0, 0.8], [0.0, 0.6, 0.8], [0.8, 0.0, 0.6]])
+
+    ranks = image_ranks(texts, IMAGES, [10, 20, 30], IMAGE_IDS)
+
+    assert ranks.tolist() == [1, 0, 2]
+
+
+def test_image_ranks_ignore_order_and_chunk_size() -> None:
+    order = [2, 0, 1]
+    shuffled_ids = [IMAGE_IDS[row] for row in order]
+
+    ranks = image_ranks(
+        TEXTS, IMAGES[order], CAPTION_IMAGE_IDS, shuffled_ids, chunk_size=1
+    )
+
+    assert ranks.tolist() == [0, 0, 0]

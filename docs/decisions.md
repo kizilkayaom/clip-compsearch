@@ -104,6 +104,21 @@ Notes:
 - The top arm C checkpoints differ by about 0.2 points, about 1 standard error on 4,986 examples.
 - The epoch for each arm is chosen in step 10 from the seed-averaged metrics, with the same rule.
 
+## Step 10: Final selection (14 Nov 2026)
+
+`results/selection.json` (commit `908f5d2`, written at `6d8d443` with a clean `src/`): arm C lr 5e-4 epoch 2.5, arm B lr 1e-4 epoch 0.5, seeds 0–2. Seed-averaged validation: arm C compositional accuracy 0.979, R@1 0.403; arm B 0.685, 0.384. No extension: neither choice is the last checkpoint.
+
+## Step 11: Test protocol (fixed before the test run, 14 Nov 2026)
+
+| Item | Choice |
+|---|---|
+| Models | Base CLIP, plus the 3 selected seeds of arms B and C (7 models). Adapters checked: the downloaded seed-0 adapters reproduce their logged validation metrics exactly. |
+| SugarCrepe | All 7 files (7,511 examples). Correct when cos(image, caption) > cos(image, negative); ties count as wrong. Accuracy per category and macro average over the 7 categories. |
+| Retrieval | val2017, 5,000 images, 25,014 captions. Text-to-image: rank of the true image per caption. Image-to-text: rank of the best-ranked true caption per image. Ties count against the true match. R@1/5/10. |
+| Table 1 | Mean and sample standard deviation over the 3 seeds per trained arm; base CLIP has 1 run. |
+| Table 2 | Paired differences B − base, C − base, C − B. Per-example values averaged over the 3 seeds, then a cluster bootstrap that resamples image IDs (10,000 resamples, seed 0, 95% percentile interval). SugarCrepe categories and their macro average share each resample. |
+| Run once | `src/eval/final_test.py` refuses to run if `results/test_results.json` exists, if `results/selection.json` is not committed, or if `src/` is dirty. Per-example outputs go to `results/test_results.npz`. |
+
 ## Open decisions
 
 - None.
