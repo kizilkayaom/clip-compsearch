@@ -1,0 +1,28 @@
+{
+  "model": "openai/clip-vit-base-patch32",
+  "seed": 0,
+  "device": "mps",
+  "max_text_tokens": 77,
+  "rank_ties": "counted against the true image",
+  "comp_rule": "correct when cos(image, caption) > cos(image, negative)",
+  "counts": {
+    "images": 5000,
+    "captions": 25012,
+    "comp_examples": 4986
+  },
+  "metrics": {
+    "comp_accuracy": 0.7206177115440369,
+    "comp_examples": 4986,
+    "t2i_r1": 0.2996561650407804,
+    "t2i_r5": 0.5510554933631857,
+    "t2i_r10": 0.6648808571885495
+  },
+  "inputs": {
+    "embeddings_sha256": "5771b11170cca0977e742297b493a2e88f109842677e05f2ebb402ff35b09cd2",
+    "negatives_sha256": "bfa6e3bb584196eb8626863bc14c046ac7f485808dbc7d6639441ae522964223",
+    "comp_caption_ids_sha256": "d949eb28a83921db05b185ed4f4961f3f5c11e461888a9941189ba519e4aa1e3"
+  },
+  "elapsed_seconds": 75.1,
+  "git_commit": "7f724bfd1b25a342f4e577c157a914d160a10471",
+  "git_dirty": false
+}
