@@ -237,3 +237,27 @@ def test_checkpoints_record_training_and_validation_time(tmp_path: Path) -> None
     for checkpoint in log["checkpoints"]:
         assert checkpoint["train_seconds"] > 0
         assert checkpoint["val_seconds"] > 0
+
+
+def test_resume_drops_checkpoints_logged_after_the_saved_state(tmp_path: Path) -> None:
+    straight = _run(tmp_path, "straight", _config(epochs=2))
+    _run(tmp_path, "split", _config(epochs=1))
+    log_path = tmp_path / "logs" / "split.json"
+    partial = json.loads(log_path.read_text())
+    partial["checkpoints"].append({**partial["checkpoints"][0], "epoch": 1.5})
+    log_path.write_text(json.dumps(partial))
+
+    resumed = _run(tmp_path, "split", _config(epochs=2), resume=True)
+
+    assert [c["epoch"] for c in resumed["checkpoints"]] == [0.5, 1.0, 1.5, 2.0]
+    straight_losses = [c["train_loss"] for c in straight["checkpoints"]]
+    resumed_losses = [c["train_loss"] for c in resumed["checkpoints"]]
+    assert resumed_losses == pytest.approx(straight_losses, rel=1e-5)
+
+
+def test_resume_without_saved_state_starts_from_scratch(tmp_path: Path) -> None:
+    straight = _run(tmp_path, "straight", _config(epochs=1))
+    fresh = _run(tmp_path, "fresh", _config(epochs=1), resume=True)
+
+    straight_losses = [c["train_loss"] for c in straight["checkpoints"]]
+    assert [c["train_loss"] for c in fresh["checkpoints"]] == straight_losses

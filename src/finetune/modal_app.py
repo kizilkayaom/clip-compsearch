@@ -131,10 +131,12 @@ def run(
 
 
 @app.local_entrypoint()
-def sweep(seed: int = 0, epochs: int = 3, allow_dirty: bool = False) -> None:
+def sweep(
+    seed: int = 0, epochs: int = 3, resume: bool = False, allow_dirty: bool = False
+) -> None:
     git = git_state(REPO_ROOT)
     check_clean(git, allow_dirty)
     jobs = sweep_jobs(ARMS, GRID, seed, epochs)
-    calls = [(remote_argv(**job), git) for job in jobs]
+    calls = [(remote_argv(**job, resume=resume), git) for job in jobs]
     for name, log in train_remote.starmap(calls):
         print(f"saved {_save_log(name, log, smoke=False)}")
