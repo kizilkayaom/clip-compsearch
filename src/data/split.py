@@ -2,6 +2,7 @@ import argparse
 import hashlib
 import json
 import logging
+import os
 import random
 import subprocess
 from collections import Counter
@@ -14,6 +15,8 @@ logger = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TRAIN_CAPTIONS = "captions_train2017.json"
 TEST_CAPTIONS = "captions_val2017.json"
+GIT_COMMIT_ENV = "CLIP_COMPSEARCH_GIT_COMMIT"
+GIT_DIRTY_ENV = "CLIP_COMPSEARCH_GIT_DIRTY"
 
 
 @dataclass(frozen=True)
@@ -76,6 +79,12 @@ def _git_output(repo: Path, *args: str) -> str:
 
 
 def git_state(repo: Path) -> dict[str, Any]:
+    commit = os.environ.get(GIT_COMMIT_ENV)
+    if commit:
+        return {
+            "git_commit": commit,
+            "git_dirty": os.environ.get(GIT_DIRTY_ENV, "1") != "0",
+        }
     return {
         "git_commit": _git_output(repo, "rev-parse", "HEAD"),
         "git_dirty": _git_output(repo, "status", "--porcelain", "--", "src") != "",

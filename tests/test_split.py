@@ -137,3 +137,12 @@ def test_main_writes_id_files_and_report(tmp_path: Path) -> None:
         assert report[name]["sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
     assert report["test"]["captions"] == 16
     assert len(report["git_commit"]) == 40
+
+
+def test_git_state_uses_launcher_values_from_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CLIP_COMPSEARCH_GIT_COMMIT", "a" * 40)
+    monkeypatch.setenv("CLIP_COMPSEARCH_GIT_DIRTY", "0")
+
+    assert git_state(tmp_path) == {"git_commit": "a" * 40, "git_dirty": False}

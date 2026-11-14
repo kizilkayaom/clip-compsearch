@@ -54,9 +54,43 @@ Each entry records a choice made before any test-set evaluation.
 | Selection rule | Consider only epochs (and learning rates) whose validation R@1 is at most 1 point below base CLIP. From those, choose the highest compositional accuracy. If none passes, choose the highest R@1 and report it. | Keeps retrieval while improving composition. Chosen before any training run. |
 | Known bias | The validation negatives come from the same generator as the training negatives, so compositional accuracy favours the hard-negative arm. | SugarCrepe in step 11 has no such bias. |
 
+## Step 7: Training setup (14 Nov 2026)
+
+| Decision | Choice | Reason |
+|---|---|---|
+| Arms | B `inbatch`: in-batch negatives only. C `hard`: plus 1 hard negative per caption as extra image-to-text columns. | Same images, captions, batches, steps and hyperparameters; only the extra negatives differ. |
+| Training pairs | Only images with a kept negative (113,019 of 113,287), 1 caption per image per epoch, chosen and shuffled with `Random(f"{seed}:{epoch}")`; last partial batch dropped | Both arms see identical batches (tested with a batch hash). |
+| Loss | Symmetric InfoNCE: mean of image-to-text and text-to-image cross-entropy. Hard negatives only in the image-to-text direction. | Plan step 7. |
+| Logit scale | Fixed at CLIP's learned value (exp(4.6052) = 100.0), not trained | The features were trained at this scale; one less variable between arms. |
+| LoRA | r=16, alpha=32, dropout 0.1 on `q_proj` and `v_proj` of the text encoder only (393,216 parameters) | Same as the original project. |
+| Optimizer | AdamW, weight decay 0.01, batch size 256, linear warmup over 50 steps, then constant | A constant rate keeps a resumed run identical to a straight run (tested), which the epoch-extension rule needs. |
+| Learning-rate grid | 2e-5, 1e-4, 5e-4, 1 seed (0), both arms | Each arm gets its own tuned rate. |
+| Epochs and checkpoints | 3 epochs; validation every half epoch (6 checkpoints per run) | Ömer's rule 3. |
+| Edge rule | If an arm's best rate is at a grid edge, run 1 more value beyond it (1e-5 or 1e-3) before choosing; at most once per edge | Ömer's rule 1. |
+| Extension rule | If the selected checkpoint is the last one, resume that arm's run to 5 epochs before the seed runs | Ömer's rule 2. |
+| Seeds | Sweep run is seed 0; the chosen configuration then runs with seeds 1 and 2 | 3 seeds per trained arm. |
+| Modes | `model.train()` for steps, `model.eval()` for validation | Right after `get_peft_model`, all 24 LoRA dropout modules are in train mode (checked); the old code never switched modes. |
+
+## Step 8: Where to train (14 Nov 2026)
+
+| Decision | Choice | Reason |
+|---|---|---|
+| Hardware | Modal, 1 A10G GPU per run (`src/finetune/modal_app.py`) | On the 16 GB Mac, arm C at batch 256 needed about 20 GB and swapped. With gradient checkpointing it fit (5.9 GB) but took about 4.3 s per step, about 13 h for the plan. |
+| Volume contents | `train.pt`, `val.pt`, both negatives files, `captions_train2017.json`; no images and no test embeddings | Training needs nothing else; the test set stays off the training volume. |
+| Git state | The local launcher sends its commit and dirty flag; runs refuse a dirty `src/` unless `--allow-dirty` (smoke runs only) | The container has no git repository. |
+
+Step 8 smoke runs (16,384 images, 2 epochs, learning rate 1e-4, A10G; logs in `results/smoke/`):
+
+| Arm | Time per step | Validation | Train loss (first → last checkpoint) |
+|---|---|---|---|
+| C `hard` | 0.383 s | 12.8 s | 1.19 → 0.86 |
+| B `inbatch` | 0.216 s | 12.9 s | 0.91 → 0.71 |
+
+Estimate for 1 full 3-epoch run (441 steps per epoch, 6 validations, plus about 1.5 min start-up): arm C about 11 min, arm B about 7.5 min. Modal price checked on 14 Nov 2026: A10 $0.000306 per second (about $1.10 per hour).
+
+Approved by Ömer on 14 Nov 2026: worst case about 2.4 GPU-hours, about $2.70.
+
 ## Open decisions
 
-- Logit scale: fixed or trainable (step 7)
-- Batch size and learning-rate grid (step 7)
-- Approval of the time and cost estimate (step 8)
+- None before the sweep.
 - Where to cache the image embeddings and where to train (after the step 8 timing)

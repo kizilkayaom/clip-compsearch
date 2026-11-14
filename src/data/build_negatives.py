@@ -7,13 +7,13 @@ import random
 import time
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import Any
 
 from spacy.language import Language
 
+from src.data.captions import CAPTION_PREPROCESSING, Caption, load_captions
 from src.data.leakage import load_id_sets
 from src.data.negatives import ENTAILMENT, NLI_MODEL_NAME, SYMMETRIC_RELATIONS
 from src.data.negatives import Negative, get_nli_model, negative_from_doc, nli_scores
@@ -34,26 +34,8 @@ SAMPLE_FIELDS = (
     "break_type",
 )
 PAIR_FIELDS = ("image_id", "caption_id", "caption", "negative", "swap_type")
-CAPTION_PREPROCESSING = "collapse whitespace runs to one space and strip the ends"
 NLI_LABEL_ORDER = ("contradiction", "entailment", "neutral")
 PROGRESS_EVERY = 50_000
-
-
-@dataclass(frozen=True)
-class Caption:
-    caption_id: int
-    image_id: int
-    text: str
-
-
-def load_captions(path: Path) -> list[Caption]:
-    with path.open() as f:
-        annotations = json.load(f)["annotations"]
-    captions = [
-        Caption(entry["id"], entry["image_id"], " ".join(entry["caption"].split()))
-        for entry in annotations
-    ]
-    return sorted(captions, key=lambda caption: (caption.image_id, caption.caption_id))
 
 
 def assign_sets(

@@ -1,0 +1,100 @@
+{
+  "checkpoints": [
+    {
+      "epoch": 0.5,
+      "step": 32,
+      "train_loss": 0.9132274482399225,
+      "val": {
+        "comp_accuracy": 0.7087845802307129,
+        "comp_examples": 4986,
+        "t2i_r1": 0.3168878938109707,
+        "t2i_r5": 0.570086358547897,
+        "t2i_r10": 0.6819526627218935
+      },
+      "train_seconds": 6.27,
+      "val_seconds": 12.91,
+      "elapsed_seconds": 19.3
+    },
+    {
+      "epoch": 1.0,
+      "step": 64,
+      "train_loss": 0.8480060026049614,
+      "val": {
+        "comp_accuracy": 0.6774969696998596,
+        "comp_examples": 4986,
+        "t2i_r1": 0.35450983527906604,
+        "t2i_r5": 0.6114265152726691,
+        "t2i_r10": 0.7200543739005277
+      },
+      "train_seconds": 8.32,
+      "val_seconds": 12.81,
+      "elapsed_seconds": 40.6
+    },
+    {
+      "epoch": 1.5,
+      "step": 96,
+      "train_loss": 0.7467425242066383,
+      "val": {
+        "comp_accuracy": 0.6734857559204102,
+        "comp_examples": 4986,
+        "t2i_r1": 0.36634415480569327,
+        "t2i_r5": 0.6276987046217816,
+        "t2i_r10": 0.7330881177035024
+      },
+      "train_seconds": 5.65,
+      "val_seconds": 12.85,
+      "elapsed_seconds": 63.0
+    },
+    {
+      "epoch": 2.0,
+      "step": 128,
+      "train_loss": 0.7123721577227116,
+      "val": {
+        "comp_accuracy": 0.6768953204154968,
+        "comp_examples": 4986,
+        "t2i_r1": 0.3763793379177995,
+        "t2i_r5": 0.6374140412601951,
+        "t2i_r10": 0.7414840876379338
+      },
+      "train_seconds": 7.46,
+      "val_seconds": 12.88,
+      "elapsed_seconds": 83.5
+    }
+  ],
+  "segments": [
+    {
+      "start_epoch": 0,
+      "git_commit": "43524e7a958bf4df72805ce357efe71a07e33466",
+      "git_dirty": true,
+      "end_epoch": 2,
+      "elapsed_seconds": 85.8
+    }
+  ],
+  "completed_epochs": 2,
+  "config": {
+    "arm": "inbatch",
+    "lr": 0.0001,
+    "seed": 0,
+    "epochs": 2,
+    "batch_size": 256,
+    "warmup_steps": 50,
+    "weight_decay": 0.01,
+    "lora_r": 16,
+    "lora_alpha": 32,
+    "lora_dropout": 0.1,
+    "eval_batch_size": 256,
+    "gradient_checkpointing": false,
+    "device": "cuda"
+  },
+  "logit_scale": 100.0,
+  "trainable_params": 393216,
+  "lora_targets": ".*text_model.*\\.(q_proj|v_proj)",
+  "images": 16384,
+  "batches_sha256": "1588be2f4f763e3f7fa523c4337de0b043b125bbb99f71eb8753bafa9ce2c67b",
+  "versions": {
+    "torch": "2.12.1+cu130",
+    "transformers": "5.12.1",
+    "peft": "0.19.1"
+  },
+  "steps_per_epoch": 64
+}

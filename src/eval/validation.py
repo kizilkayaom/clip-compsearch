@@ -13,7 +13,7 @@ import torch
 import torch.nn.functional as F
 from transformers import CLIPModel, CLIPProcessor
 
-from src.data.build_negatives import load_captions
+from src.data.captions import load_captions
 from src.data.cache_embeddings import load_set
 from src.data.split import REPO_ROOT, TRAIN_CAPTIONS, git_state
 from src.eval.recall_at_k import caption_ranks, recall_at_k
