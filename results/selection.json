@@ -1,0 +1,53 @@
+{
+  "rule": "Keep checkpoints whose validation R@1 is at most 1 point below base CLIP; choose the highest compositional accuracy; else the highest R@1.",
+  "base_r1": 0.2996561650407804,
+  "guard": 0.01,
+  "arms": {
+    "inbatch": {
+      "lr": 0.0001,
+      "epochs": 3,
+      "epoch": 0.5,
+      "val": {
+        "comp_accuracy": 0.6849846243858337,
+        "t2i_r1": 0.38417559571405724,
+        "t2i_r5": 0.6464896849512234,
+        "t2i_r10": 0.7506530198837891
+      },
+      "guard_passed": true,
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "checkpoints": [
+        "runs/inbatch_lr1e-04_seed0/checkpoints/epoch_0.5",
+        "runs/inbatch_lr1e-04_seed1/checkpoints/epoch_0.5",
+        "runs/inbatch_lr1e-04_seed2/checkpoints/epoch_0.5"
+      ]
+    },
+    "hard": {
+      "lr": 0.0005,
+      "epochs": 3,
+      "epoch": 2.5,
+      "val": {
+        "comp_accuracy": 0.9788073301315308,
+        "t2i_r1": 0.40341969188123034,
+        "t2i_r5": 0.6775014659630044,
+        "t2i_r10": 0.7800788954635108
+      },
+      "guard_passed": true,
+      "seeds": [
+        0,
+        1,
+        2
+      ],
+      "checkpoints": [
+        "runs/hard_lr5e-04_seed0/checkpoints/epoch_2.5",
+        "runs/hard_lr5e-04_seed1/checkpoints/epoch_2.5",
+        "runs/hard_lr5e-04_seed2/checkpoints/epoch_2.5"
+      ]
+    }
+  },
+  "git_commit": "6d8d443d7e2833fe2b3950b221d83d4039edabce",
+  "git_dirty": false
+}
