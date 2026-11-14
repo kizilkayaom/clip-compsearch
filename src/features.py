@@ -1,4 +1,7 @@
+from pathlib import Path
+
 import torch
+from peft import PeftModel
 from transformers import BatchEncoding, CLIPModel, CLIPProcessor
 
 MODEL_NAME = "openai/clip-vit-base-patch32"
@@ -10,6 +13,11 @@ def load_clip(device: str = "cpu") -> tuple[CLIPModel, CLIPProcessor]:
     model = CLIPModel.from_pretrained(MODEL_NAME).eval().to(device)
     processor = CLIPProcessor.from_pretrained(MODEL_NAME)
     return model, processor
+
+
+def load_adapter(path: Path, device: str = "cpu") -> PeftModel:
+    base, _ = load_clip("cpu")
+    return PeftModel.from_pretrained(base, str(path)).to(device).eval()
 
 
 @torch.no_grad()

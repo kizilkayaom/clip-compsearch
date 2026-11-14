@@ -69,3 +69,25 @@ def test_text_features_are_projected_and_keep_gradients(
     assert features.shape == (2, EMBED_DIM)
     assert torch.allclose(features.detach(), expected, atol=1e-6)
     assert features.requires_grad
+
+
+def test_load_adapter_matches_the_saved_model(tmp_path) -> None:
+    from src.features import load_adapter
+    from src.finetune.train import build_model
+
+    torch.manual_seed(0)
+    model, processor = build_model("cpu")
+    for name, param in model.named_parameters():
+        if "lora_B" in name:
+            torch.nn.init.normal_(param, std=0.02)
+    model.save_pretrained(tmp_path / "adapter")
+    tokens = tokenize(processor, ["A dog runs on the grass."])
+
+    loaded = load_adapter(tmp_path / "adapter", "cpu")
+
+    model.eval()
+    with torch.no_grad():
+        expected = text_features(model, tokens["input_ids"], tokens["attention_mask"])
+        actual = text_features(loaded, tokens["input_ids"], tokens["attention_mask"])
+    assert not loaded.training
+    assert torch.allclose(actual, expected, atol=1e-6)

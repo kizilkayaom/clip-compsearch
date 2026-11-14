@@ -1,195 +1,204 @@
 # CLIP-CompSearch
 
-![image](docs/images/hero.gif)
+Text-side LoRA fine-tuning of CLIP with generated hard negatives, so that image search respects word order and relations ("a dog behind the shoes" vs "shoes behind the dog"). Only the text encoder is adapted; the vision encoder is frozen and its embeddings are cached.
 
-A compositional image search engine that triees to correctly rank relational queries (e.g. "a red mug *on top of* a blue book") that standard CLIP model usually gets wrong.
-
-The search engine is powered by a text-side LoRA hard-negative fine-tuning, and it was evaluated on SugarCrepe with the standard retrieval preserved.
-
-## The Problem
-
-CLIP-based image search treats queries like a bag of words, which means that it retrieves the right objects but ignores how they relate to one another. In the standard CLIP-based search, "A dog sitting behind a pair of shoes" and "a pair of shoes sitting behind a dog" usually score nearly identically.
-
-## The Fix
-
-In order to fix this, I have fine-tuned  the CLIP's text encoder with LoRA using composition-aware hard negatives. This process is automated with a swap function supporting noun and adjective swaps, and a rule filter that removes swaps that keep the meaning (see [Why a rule filter replaces NLI](#why-a-rule-filter-replaces-nli)). However, CLIP's vision encoder is not updated, and only non-vision encoding parameters (0.62% of the total params.) were trained.
+All numbers below are from a held-out test run: no test image was used for training or for any choice of hyperparameters.
 
 ## Results
 
-### SugarCrepe Compositional Accuracy
+**Setup.** Training on 113,019 COCO train2017 images; model selection on a separate 5,000-image slice of train2017; test on all 5,000 COCO val2017 images and all 7,511 SugarCrepe examples. Three seeds per trained arm. Base CLIP is deterministic (1 run).
 
-| Category    | Base CLIP | Fine-tuned |      Δ |
-|-------------|-----------|------------|--------|
-| swap_obj    |    61.2%  |     68.6%  | +7.4pp |
-| swap_att    |    64.1%  |     71.5%  | +7.4pp |
-| add_att     |    69.5%  |     83.2%  | +13.7pp |
-| replace_rel |    69.4%  |     72.2%  | +2.8pp |
-| add_obj     |    77.0%  |     89.3%  | +12.3pp |
-| replace_att |    80.3%  |     79.8%  |  -0.5pp |
-| replace_obj |    90.7%  |     91.6%  | +0.9pp |
+- **Arm B:** LoRA fine-tuning with in-batch negatives only.
+- **Arm C:** the same, plus one generated hard negative per caption.
 
-Biggest gains on the hardest categories (swap/add), where CLIP was near chance.
+The two arms use identical images, captions, batches, steps and hyperparameter search; only the extra negatives differ. So **C − B measures the effect of the hard negatives**, and B − base measures the effect of fine-tuning on COCO captions.
 
-### Retrieval Preservation (R@K on 500 COCO val images)
+### Table 1: Test accuracy (%; mean ± std over 3 seeds)
 
-| Metric | Base CLIP | Fine-tuned |
-|--------|-----------|------------|
-| R@1    |    59.2%  |     56.8%  |
-| R@5    |    86.8%  |     87.6%  |
-| R@10   |    94.4%  |     95.2%  |
+| SugarCrepe category (examples) | Base CLIP | B: in-batch only | C: + hard negatives |
+|---|---|---|---|
+| swap_obj (245) | 61.2 | 61.9 ± 1.6 | 71.7 ± 1.6 |
+| swap_att (666) | 64.1 | 69.0 ± 0.5 | 73.1 ± 1.0 |
+| replace_obj (1,652) | 90.7 | 93.2 ± 0.1 | 92.9 ± 0.6 |
+| replace_att (788) | 80.3 | 84.3 ± 0.6 | 85.5 ± 0.7 |
+| replace_rel (1,406) | 69.4 | 69.0 ± 0.1 | 72.9 ± 0.4 |
+| add_obj (2,062) | 77.0 | 88.2 ± 0.6 | 87.8 ± 1.1 |
+| add_att (692) | 69.5 | 79.7 ± 0.2 | 78.2 ± 0.7 |
+| **Macro average** | **73.2** | **77.9 ± 0.2** | **80.3 ± 0.3** |
 
-The standard retrieval stays intact within noise.
+| Retrieval (val2017, 5,000 images, 25,014 captions) | Base CLIP | B: in-batch only | C: + hard negatives |
+|---|---|---|---|
+| Text → image R@1 | 30.5 | 37.5 ± 0.0 | 39.5 ± 0.1 |
+| Text → image R@5 | 54.8 | 64.0 ± 0.1 | 67.0 ± 0.1 |
+| Text → image R@10 | 66.2 | 74.6 ± 0.1 | 77.4 ± 0.2 |
+| Image → text R@1 | 50.0 | 56.2 ± 0.2 | 57.4 ± 0.3 |
+| Image → text R@5 | 74.8 | 79.6 ± 0.4 | 80.9 ± 0.1 |
+| Image → text R@10 | 83.1 | 87.2 ± 0.1 | 88.3 ± 0.1 |
 
-## Setup
-```bash
-git clone https://github.com/placeholder/clip-compsearch.git
-cd clip-compsearch
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python -m spacy download en_core_web_sm
-```
+### Table 2: Paired differences (points, 95% interval)
 
-#### Download the required data
-```bash
-# COCO val2017 images
-mkdir -p data/coco
-wget http://images.cocodataset.org/zips/val2017.zip -O data/coco/val2017.zip
-unzip data/coco/val2017.zip -d data/coco/
-rm data/coco/val2017.zip
+Per-example results are averaged over the 3 seeds; the interval comes from a paired bootstrap that resamples **image IDs** (10,000 resamples), because one image can carry several SugarCrepe examples and five captions.
 
-# COCO captions
-wget http://images.cocodataset.org/annotations/annotations_trainval2017.zip -O data/coco/annotations.zip
-unzip -j data/coco/annotations.zip annotations/captions_val2017.json -d data/coco/
-rm data/coco/annotations.zip
+| Metric | C − B (hard negatives) | C − base | B − base |
+|---|---|---|---|
+| SugarCrepe swap_obj | +9.8 [+4.2, +15.5] | +10.5 [+4.5, +16.7] | +0.7 [−5.2, +6.4] |
+| SugarCrepe swap_att | +4.1 [+1.3, +6.7] | +9.0 [+5.4, +12.5] | +4.9 [+1.7, +8.2] |
+| SugarCrepe replace_obj | −0.3 [−1.1, +0.5] | +2.2 [+1.1, +3.4] | +2.5 [+1.6, +3.5] |
+| SugarCrepe replace_att | +1.2 [−0.4, +2.8] | +5.2 [+2.8, +7.7] | +4.0 [+1.6, +6.4] |
+| SugarCrepe replace_rel | +3.9 [+2.2, +5.7] | +3.5 [+1.2, +5.8] | −0.5 [−2.6, +1.7] |
+| SugarCrepe add_obj | −0.3 [−1.2, +0.6] | +10.8 [+9.2, +12.4] | +11.2 [+9.6, +12.7] |
+| SugarCrepe add_att | −1.5 [−3.8, +0.7] | +8.7 [+5.6, +11.8] | +10.2 [+7.2, +13.2] |
+| **SugarCrepe macro average** | **+2.4 [+1.4, +3.4]** | **+7.1 [+5.9, +8.3]** | **+4.7 [+3.5, +5.9]** |
+| Text → image R@1 | +2.0 [+1.6, +2.3] | +9.0 [+8.4, +9.7] | +7.1 [+6.5, +7.6] |
+| Text → image R@5 | +3.0 [+2.6, +3.4] | +12.2 [+11.5, +12.9] | +9.2 [+8.6, +9.8] |
+| Text → image R@10 | +2.9 [+2.5, +3.2] | +11.2 [+10.5, +11.8] | +8.3 [+7.7, +8.9] |
+| Image → text R@1 | +1.2 [+0.4, +2.1] | +7.4 [+6.3, +8.5] | +6.2 [+5.1, +7.3] |
+| Image → text R@5 | +1.3 [+0.6, +2.1] | +6.1 [+5.2, +7.1] | +4.8 [+3.9, +5.7] |
+| Image → text R@10 | +1.1 [+0.5, +1.7] | +5.2 [+4.3, +6.0] | +4.1 [+3.3, +4.9] |
 
-# SugarCrepe benchmark
-mkdir -p data/sugarcrepe
-git clone https://github.com/RAIVNLab/sugar-crepe.git /tmp/sugarcrepe
-cp /tmp/sugarcrepe/data/*.json data/sugarcrepe/
-rm -rf /tmp/sugarcrepe
-```
+### What the results show
 
-## Usage
-```bash
-# Cache vision embeddings (run once)
-python -m src.data.cache_embeddings
+- **Hard negatives add +2.4 points of SugarCrepe macro accuracy** over the same fine-tune without them. The gain is concentrated where the generator works: it only makes swap negatives, and swap_obj (+9.8) and swap_att (+4.1) are the categories where it helps. On the add and replace categories, C − B is near zero, except replace_rel (+3.9), which was not predicted in advance.
+- **About two-thirds of the gain over base CLIP comes from fine-tuning on COCO captions alone** (B − base: +4.7 of the +7.1 macro points).
+- **Retrieval is not traded away.** Both arms improve text-to-image R@1 on the 5,000 val2017 images (30.5 → 37.5 and 39.5). These are COCO-style captions, so this is an in-domain result.
+- Each comparison has 14 intervals without a multiple-comparison correction; one of them can exclude zero by chance. The headline metrics (SugarCrepe macro average and text-to-image R@1) were fixed before the test run.
 
-# Train the LoRA fine-tune
-python -m src.finetune.train
+Machine-readable results: [`results/test_results.json`](results/test_results.json); per-example outputs: `results/test_results.npz`.
 
-# Evaluate on SugarCrepe (all categories)
-python -m src.eval.matching
+## What changed from the first version
 
-# Launch the search demo
-python demo/app.py
-```
+The first version of this project reported SugarCrepe and Recall@K gains that were **not valid**, and they have been removed:
 
-## Demo
+1. **Train/test overlap.** It trained on COCO val2017, which is where the SugarCrepe images and the Recall@K test images come from.
+2. **Selection on the test set.** Learning rate and epochs were chosen by SugarCrepe scores.
+3. **The training script could not reproduce the run.** It read image file names as captions, so no hard negative was ever formed.
 
-In the demo, I have included a **Search** tab for gallery retrieval and a **Matching** tab for controlled compositional tests. The matching tab shows the clearest improvement. At the gallery scale (in search), however, ranking changes are subtler because many visually similar images compete within narrow score margins.
+This version rebuilds the pipeline with a held-out split, a leakage check, a validation slice for every choice, 3 seeds and paired intervals. Every decision and its reason is logged in [`docs/decisions.md`](docs/decisions.md).
 
-### Where it works
+## Method
 
-<table>
-<tr>
-<td width="50%"><img src="docs/images/pair12_success.png" alt="pair12 success"/></td>
-<td width="50%"><img src="docs/images/pair12_fail.png" alt="pair12 fail"/></td>
-</tr>
-<tr>
-<td align="center"><small><i>The fine-tuned model ranks the correct image higher, while the base CLIP model treat both arrangements equally.</i></small></td>
-<td align="center"><small><i>Both models fail.</i></small></td>
-</tr>
-</table>
+### Data split and leakage check
+- **Train:** 113,287 train2017 images (566,741 captions). **Validation:** 5,000 train2017 images, sampled with seed 0 (25,012 captions). **Test:** all 5,000 val2017 images (25,014 captions).
+- The image-ID lists are committed in `data/splits/`. A test asserts that the three sets share no image and that all 1,560 SugarCrepe images are in the test set ([`results/leakage_report.json`](results/leakage_report.json)).
 
-### Where it fails
+### Hard negatives
+- **Generator** (spaCy `en_core_web_sm`): swap the first noun with the first later, different noun; fall back to adjectives. Compound nouns ("tennis player"), hyphenated words ("t-shirt") and "X of Y" phrases ("a group of kids") move as one unit; position nouns ("in front of") are skipped; "a"/"an" is corrected after the swap.
+- **Filter:** reject swaps whose two units are joined by "and"/"or" or by a symmetric relation (next to, beside, near, by, alongside, across from, opposite), because those swaps keep the meaning.
+- **Output:** 502,010 caption–negative pairs from 566,741 training captions (12,020 captions had no swap; 52,711 swaps were rejected by the filter); 113,019 of 113,287 training images keep at least one pair ([`results/negatives_report.json`](results/negatives_report.json)).
 
-<table>
-<tr>
-<td width="50%"><img src="docs/images/fail_success.png" alt="fail success"/></td>
-<td width="50%"><img src="docs/images/fail_fail.png" alt="fail fail"/></td>
-</tr>
-<tr>
-<td colspan="2" align="center"><small><i>Both models return nearly identical results for both queries.</i></small></td>
-</tr>
-</table>
-
-
-
-### Matching
-
-<table>
-<tr>
-<td width="50%"><img src="docs/images/matching_finetune.png" alt="matching finetune"/></td>
-<td width="50%"><img src="docs/images/matching_fail.png" alt="matching fail"/></td>
-</tr>
-<tr>
-<td align="center"><small><i>In a majority of cases, the base CLIP scores the wrong caption higher, and the fine-tuned model corrects it.</i></small></td>
-<td align="center"><small><i>However, some compositional swaps remain too subtle for either model.</i></small></td>
-</tr>
-</table>
-
-## Methodology
-
-1. Encode COCO val2017 images with frozen CLIP vision encoder (cached once)
-2. Generate hard negatives via spaCy POS-swaps (nouns, adjectives) + a rule filter for symmetric swaps
-3. Attach LoRA adapters (with parameters r=16, α=32) to the text encoder's query and value projections (q_proj, v_proj)
-4. Train the model with InfoNCE contrastive loss so that each image prefers its caption over both random in-batch texts and its constructed hard negative
-5. Evaluate on SugarCrepe (for compositional accuracy) and Recall@K (for retrieval)
-
-All of the testing scripts are available under `notebooks/`
-
-### Why a rule filter replaces NLI
+#### Why a rule filter replaces NLI
 
 The first version filtered the swaps with an NLI model (`cross-encoder/nli-deberta-v3-small`) and removed every pair labelled as entailment. A check on 2,000 COCO train2017 captions showed two problems:
 
 - **It removed real negatives.** The model labelled 1,033 of 1,984 swap negatives (52%) as entailment. Many of them change the meaning, for example "A man in a crown wears a red jacket and is on the phone." → "A crown in a man wears a red jacket and is on the phone." A swap keeps every word of the caption, and NLI models tend to predict entailment when the premise and the hypothesis share their words (McCoy et al., 2019).
 - **It kept swaps that keep the meaning.** It labelled "A dog and a cat sit on a sofa." → "A cat and a dog sit on a sofa." as contradiction.
 
-The rule filter rejects a swap when the two swapped units are joined by "and" or "or", or by a symmetric relation: next to, beside, near, by, alongside, across from, opposite. The NLI scores are still stored with each pair, but they are not used for filtering.
+The NLI scores are still stored with each pair, but they are not used for filtering.
 
-## Training Configuration
+### Training
+- **Loss:** symmetric InfoNCE (mean of image→text and text→image cross-entropy). Arm C appends the hard negatives as extra image→text columns. Each image appears once per batch: one caption per image is sampled per epoch.
+- **Model selection** (validation slice only): keep checkpoints whose text→image R@1 is at most 1 point below base CLIP; among those, choose the highest accuracy on validation hard negatives. Learning-rate grid 2e-5, 1e-4, 5e-4 for both arms with seed 0, validated every half epoch; an extra run beyond a grid edge if the best rate is at the edge (arm C: 1e-3, which did not win). The epoch is chosen on the 3-seed average ([`results/selection.json`](results/selection.json)).
 
-| Parameter        | Value                         |
-|------------------|-------------------------------|
-| Base model       | openai/clip-vit-base-patch32  |
-| LoRA rank        | 16                            |
-| LoRA targets     | q_proj, v_proj (text encoder) |
-| Trainable params. | 393,216 / 63.5M (0.62%)       |
-| Learning rate    | 1e-5                          |
-| Epochs           | 5                             |
-| Batch size       | 32                            |
-| Training data    | COCO val2017 (5000 images)    |
-| Temperature      | 0.07                          |
+| Parameter | Value |
+|---|---|
+| Base model | `openai/clip-vit-base-patch32` |
+| LoRA | r = 16, α = 32, dropout 0.1 on `q_proj`, `v_proj` of the text encoder |
+| Trainable parameters | 393,216 (0.62% of the text encoder, 0.26% of CLIP) |
+| Logit scale | Fixed at CLIP's learned value, 100 |
+| Batch size | 256 images (arm C: 512 texts per step) |
+| Optimizer | AdamW, weight decay 0.01, 50 warmup steps, then constant |
+| Selected learning rate | Arm C: 5e-4; arm B: 1e-4 |
+| Selected checkpoint | Arm C: epoch 2.5 of 3; arm B: epoch 0.5 of 3 |
+| Seeds | 0, 1, 2 |
+| Hardware | 1 NVIDIA A10G on Modal; about 9 minutes per arm C run |
+
+## Reproduce
+
+### Setup
+```bash
+git clone https://github.com/kizilkayaom/clip-compsearch.git
+cd clip-compsearch
+python3.13 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pytest
+```
+Use a git clone, not a ZIP download: every report records the git commit it ran on, and the tests check this. Tested with Python 3.13.5 on macOS (Apple M4); training ran on Linux with CUDA through Modal.
+
+### Data
+```bash
+mkdir -p data/coco data/sugarcrepe
+wget http://images.cocodataset.org/zips/train2017.zip -O data/coco/train2017.zip   # about 18 GB
+wget http://images.cocodataset.org/zips/val2017.zip -O data/coco/val2017.zip
+wget http://images.cocodataset.org/annotations/annotations_trainval2017.zip -O data/coco/annotations.zip
+unzip -q data/coco/train2017.zip -d data/coco/ && unzip -q data/coco/val2017.zip -d data/coco/
+unzip -q data/coco/annotations.zip -d data/coco/
+git clone https://github.com/RAIVNLab/sugar-crepe.git /tmp/sugar-crepe
+cp /tmp/sugar-crepe/data/*.json data/sugarcrepe/
+```
+
+### Pipeline
+The committed files in `data/splits/` and `results/` let you skip any step; each step writes a report with the git commit it ran on.
+
+```bash
+A=data/coco/annotations
+python -m src.data.split --annotations-dir $A                 # data/splits/, results/split_report.json
+python -m src.data.leakage                                    # results/leakage_report.json
+python -m src.data.build_negatives --annotations-dir $A       # data/negatives/ (about 1 h on an M4 Mac)
+python -m src.data.cache_embeddings --train2017-dir data/coco/train2017 --val2017-dir data/coco/val2017
+python -m src.eval.validation --annotations-dir $A            # results/val_baseline.json
+```
+
+**Training on Modal** (the volume needs only the cached embeddings, the negatives and the caption file):
+```bash
+V=clip-compsearch-train
+modal volume create $V
+modal volume put $V embeddings/clip-vit-base-patch32/train.pt /embeddings/clip-vit-base-patch32/train.pt
+modal volume put $V embeddings/clip-vit-base-patch32/val.pt /embeddings/clip-vit-base-patch32/val.pt
+modal volume put $V data/negatives/train.jsonl /data/negatives/train.jsonl
+modal volume put $V data/negatives/val.jsonl /data/negatives/val.jsonl
+modal volume put $V $A/captions_train2017.json /annotations/captions_train2017.json
+
+modal run --detach src/finetune/modal_app.py::sweep           # 6 runs in parallel
+python -m src.finetune.select --arm hard                      # applies the selection and sweep rules
+modal run --detach src/finetune/modal_app.py::run --arm hard --lr 5e-4 --seed 1
+python -m src.finetune.select --final                         # results/selection.json, after seeds 1 and 2 of both arms
+```
+To train locally instead, run `python -m src.finetune.train --arm hard --lr 5e-4 --annotations-dir $A --gradient-checkpointing` (needed on a 16 GB Mac).
+
+**Test (once):** download the selected adapters from the volume into `runs/`, then run
+```bash
+python -m src.eval.final_test --annotations-dir $A            # results/test_results.json and .npz
+```
+The script refuses to run if the results already exist, if `results/selection.json` is not committed, or if `src/` has uncommitted changes.
+
+## Demo
+```bash
+python demo/app.py
+```
+A **Search** tab ranks the 5,000 val2017 images for a text query with base CLIP and with the fine-tuned model (arm C, seed 0, committed in `checkpoints/`). A **Matching** tab shows SugarCrepe examples and whether each model scores the caption above its negative. It needs `data/coco/val2017/`, `data/sugarcrepe/` and the cached `test.pt` embeddings.
 
 ## Limitations
-
-- The model was trained on the COCO 2017 dataset, which has 5000 images. Given the small dataset size, it is possible to observe higher accuracy results if trained on a larger dataset. 
-- The hard-negative generator used to train this model is limited to the noun and adjective swaps. Verb and preposition swaps are not supported.
-- The model fails on cases where the visual distinction between arrangements is small.
+- The generator only swaps nouns and adjectives. The gains are concentrated in the swap categories; the add and replace categories are not improved by the hard negatives.
+- The validation hard negatives come from the same generator as the training negatives. Arm C's validation accuracy (97.9%) is much higher than its SugarCrepe swap accuracy, and for arm B the selection rule chose the earliest checkpoint (epoch 0.5), because its accuracy on generated negatives fell during training.
+- Singular/plural agreement is not repaired after a swap ("A plastic trays is presented …"); the grammar error rate of the generated negatives has not been measured yet.
+- One backbone (ViT-B/32), 3 seeds, and COCO-style captions only. swap_obj has 245 examples, so its interval is wide.
 
 ## Project Structure
 ```
 clip-compsearch/
 ├── src/
-│   ├── search/
-│   │   ├── engine.py
-│   │   └── run_search.py
-│   ├── eval/
-│   │   ├── matching.py
-│   │   └── recall_at_k.py
-│   ├── data/
-│   │   ├── negatives.py
-│   │   └── cache_embeddings.py
-│   └── finetune/
-│       └── train.py
-├── demo/
-│   └── app.py
-├── notebooks/
-├── docs/images/
-├── data/
-├── checkpoints/
-└── log.md
+│   ├── features.py            # CLIP loading and the shared feature functions
+│   ├── data/                  # split, leakage check, negatives, image-embedding cache
+│   ├── finetune/              # data, loss, training, selection rules, Modal launcher
+│   ├── eval/                  # validation metrics, Recall@K, bootstrap, one-time test
+│   └── search/                # first-version search helpers (not used by the pipeline)
+├── tests/                     # pytest suite
+├── demo/app.py                # Gradio demo
+├── checkpoints/               # selected arm C adapter (seed 0)
+├── data/splits/               # committed image-ID lists
+├── results/                   # reports, run logs, selection and test results
+└── docs/decisions.md          # every decision and its reason
 ```
 
 ## References
@@ -204,4 +213,3 @@ clip-compsearch/
 - [COCO Dataset](https://cocodataset.org/) — CC-BY 4.0
 - [HuggingFace PEFT](https://github.com/huggingface/peft) — Apache 2.0
 - [spaCy](https://spacy.io/) — MIT License
-- [Gradio](https://gradio.app/) — Apache 2.0

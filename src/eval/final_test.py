@@ -11,7 +11,6 @@ from typing import Any
 
 import numpy as np
 import torch
-from peft import PeftModel
 from transformers import CLIPModel, CLIPProcessor
 
 from src.data.cache_embeddings import load_set
@@ -21,7 +20,7 @@ from src.data.split import REPO_ROOT, TEST_CAPTIONS, git_state
 from src.eval.bootstrap import bootstrap_groups, cluster_totals
 from src.eval.recall_at_k import caption_ranks, image_ranks
 from src.eval.validation import compositional_correct, encode_texts
-from src.features import load_clip
+from src.features import load_adapter, load_clip
 
 logger = logging.getLogger(__name__)
 
@@ -213,11 +212,6 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _load_adapter(path: Path, device: str) -> CLIPModel:
-    base, _ = load_clip("cpu")
-    return PeftModel.from_pretrained(base, str(path)).to(device).eval()
-
-
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Evaluate the selected checkpoints on the test sets, once."
@@ -280,7 +274,7 @@ def main(argv: list[str] | None = None, require_ready: bool = True) -> None:
         outputs[arm] = []
         for seed, path in zip(selection["arms"][arm]["seeds"], checkpoints[arm]):
             logger.info("evaluating %s seed %s: %s", arm, seed, path)
-            outputs[arm].append(run(_load_adapter(path, args.device), processor))
+            outputs[arm].append(run(load_adapter(path, args.device), processor))
             names.append(f"{arm}_{seed}")
 
     summary = summarize(

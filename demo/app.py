@@ -1,137 +1,127 @@
-import random, json, torch
-import gradio as gr
-from PIL import Image
-from src.search import engine
+import argparse
+import random
+from collections.abc import Sequence
+from pathlib import Path
+
+import torch
 import torch.nn.functional as F
-from peft import LoraConfig, PeftModel
+from PIL import Image
 
-base_model, processor = engine.load_model("openai/clip-vit-base-patch32")
+from src.data.cache_embeddings import image_path, load_set
+from src.eval.final_test import SugarExample, load_sugarcrepe
+from src.eval.validation import encode_texts
+from src.features import load_adapter, load_clip
 
-tuned_model, _ = engine.load_model("openai/clip-vit-base-patch32")
-tuned_model.text_model = PeftModel.from_pretrained(
-    tuned_model.text_model, 
-    "checkpoints/lora_epoch5"
-)
+DEFAULT_CHECKPOINT = Path("checkpoints/hard_lr5e-04_seed0_epoch2.5")
+MODES = ("Fine-tune wins", "Both fail", "Both succeed", "Random")
 
-image_embeddings = torch.load("embeddings/coco_val_embeddings.pt")
 
-with open("embeddings/coco_val_filenames.json", 'r') as f:
-    filenames = json.load(f)
+def rank_gallery(
+    query: torch.Tensor, gallery: torch.Tensor, image_ids: Sequence[int], k: int
+) -> tuple[list[int], list[float]]:
+    scores = F.normalize(query, dim=-1) @ F.normalize(gallery, dim=-1).T
+    top = torch.topk(scores[0], k)
+    return [image_ids[i] for i in top.indices.tolist()], top.values.tolist()
 
-with open("data/sugarcrepe/swap_obj.json", 'r') as f:
-    sugar_data = json.load(f)
 
-def search(query, k=5):
-    with torch.no_grad():
-        text_inputs = processor(text=[query], return_tensors="pt", padding=True)
-        
-        base_feat = base_model.get_text_features(
-            input_ids=text_inputs["input_ids"],
-            attention_mask=text_inputs["attention_mask"]
-        ).pooler_output
-        
-        tuned_feat = tuned_model.get_text_features(
-            input_ids=text_inputs["input_ids"],
-            attention_mask=text_inputs["attention_mask"]
-        ).pooler_output
+def verdict(caption_score: float, negative_score: float) -> str:
+    return "Pass" if caption_score > negative_score else "Fail"
 
-        l2_base = F.normalize(base_feat, p=2, dim=1)
-        l2_tuned = F.normalize(tuned_feat, p=2, dim=1)
-        l2_images = F.normalize(image_embeddings, p=2, dim=1)
 
-        base_sim = torch.matmul(l2_base, l2_images.T)
-        tuned_sim = torch.matmul(l2_tuned, l2_images.T)
+def _pair_scores(
+    model, processor, image: torch.Tensor, texts: list[str]
+) -> list[float]:
+    features = encode_texts(model, processor, texts, batch_size=2)
+    return F.cosine_similarity(image[None, :], features).tolist()
 
-        base_topk = torch.topk(base_sim, k)
-        tuned_topk = torch.topk(tuned_sim, k)
 
-        base_images = [(Image.open(f"data/coco/val2017/{filenames[idx]}"), 
-                        f"#{r+1} ({base_topk.values[0][r]:.3f})") 
-                       for r, idx in enumerate(base_topk.indices[0])]
-        
-        tuned_images = [(Image.open(f"data/coco/val2017/{filenames[idx]}"), 
-                         f"#{r+1} ({tuned_topk.values[0][r]:.3f})") 
-                        for r, idx in enumerate(tuned_topk.indices[0])]
+def build_demo(args: argparse.Namespace):
+    import gradio as gr
 
-        return (base_images, tuned_images)
+    base, processor = load_clip(args.device)
+    tuned = load_adapter(args.checkpoint, args.device)
+    image_ids, gallery = load_set(args.gallery)
+    row_of = {image_id: row for row, image_id in enumerate(image_ids)}
+    examples: list[SugarExample] = load_sugarcrepe(args.sugarcrepe_dir)
+    rng = random.Random(0)
 
-def match_example(mode):
-    keys = list(sugar_data.keys())
-    
-    for _ in range(100):
-        key = random.choice(keys)
-        entry = sugar_data[key]
-        image = Image.open(f"data/coco/val2017/{entry['filename']}")
-        caption = entry["caption"]
-        negative = entry["negative_caption"]
+    def gallery_items(model, query: str, k: int) -> list[tuple[Image.Image, str]]:
+        features = encode_texts(model, processor, [query], batch_size=1)
+        ids, scores = rank_gallery(features, gallery, image_ids, int(k))
+        return [
+            (Image.open(image_path(args.images_dir, i)), f"#{rank} ({score:.3f})")
+            for rank, (i, score) in enumerate(zip(ids, scores), start=1)
+        ]
 
-        with torch.no_grad():
-            img_inputs = processor(images=image, return_tensors="pt", padding=True)
-            base_img = base_model.get_image_features(pixel_values=img_inputs["pixel_values"]).pooler_output
-            tuned_img = tuned_model.get_image_features(pixel_values=img_inputs["pixel_values"]).pooler_output
+    def search(query: str, k: int):
+        return gallery_items(base, query, k), gallery_items(tuned, query, k)
 
-            txt_inputs = processor(text=[caption, negative], return_tensors="pt", padding=True)
-            base_txt = base_model.get_text_features(input_ids=txt_inputs["input_ids"], attention_mask=txt_inputs["attention_mask"]).pooler_output
-            tuned_txt = tuned_model.get_text_features(input_ids=txt_inputs["input_ids"], attention_mask=txt_inputs["attention_mask"]).pooler_output
+    def match_example(mode: str):
+        for _ in range(200):
+            example = rng.choice(examples)
+            image = gallery[row_of[example.image_id]]
+            texts = [example.caption, example.negative]
+            base_scores = _pair_scores(base, processor, image, texts)
+            tuned_scores = _pair_scores(tuned, processor, image, texts)
+            base_ok = verdict(*base_scores) == "Pass"
+            tuned_ok = verdict(*tuned_scores) == "Pass"
+            wanted = {
+                "Fine-tune wins": not base_ok and tuned_ok,
+                "Both fail": not base_ok and not tuned_ok,
+                "Both succeed": base_ok and tuned_ok,
+                "Random": True,
+            }
+            if wanted[mode]:
+                break
+        table = (
+            f"**Category:** {example.category}\n\n"
+            f"**Caption:** {example.caption}\n\n"
+            f"**Negative:** {example.negative}\n\n"
+            "| Model | Caption | Negative | Verdict |\n|---|---|---|---|\n"
+            f"| Base CLIP | {base_scores[0]:.4f} | {base_scores[1]:.4f} "
+            f"| {verdict(*base_scores)} |\n"
+            f"| Fine-tuned | {tuned_scores[0]:.4f} | {tuned_scores[1]:.4f} "
+            f"| {verdict(*tuned_scores)} |\n"
+        )
+        return Image.open(image_path(args.images_dir, example.image_id)), table
 
-        base_sim = torch.matmul(F.normalize(base_txt, dim=1), F.normalize(base_img, dim=1).T)
-        tuned_sim = torch.matmul(F.normalize(tuned_txt, dim=1), F.normalize(tuned_img, dim=1).T)
+    with gr.Blocks(title="CLIP-CompSearch") as demo:
+        with gr.Tab("Search"):
+            gr.Markdown("Search 5,000 COCO val2017 images; none were used in training.")
+            with gr.Row():
+                query = gr.Textbox(label="Query", scale=4)
+                k = gr.Slider(3, 10, value=5, step=1, label="Results", scale=1)
+            button = gr.Button("Search", variant="primary")
+            with gr.Row():
+                base_gallery = gr.Gallery(label="Base CLIP", columns=5, height=300)
+                tuned_gallery = gr.Gallery(label="Fine-tuned", columns=5, height=300)
+            button.click(search, [query, k], [base_gallery, tuned_gallery])
+        with gr.Tab("Matching"):
+            gr.Markdown("SugarCrepe: is the caption scored above its negative?")
+            with gr.Row():
+                mode = gr.Dropdown(list(MODES), value=MODES[0], label="Show")
+                next_button = gr.Button("Next example", variant="primary")
+            with gr.Row():
+                shown = gr.Image(label="Image", height=400)
+                result = gr.Markdown()
+            next_button.click(match_example, mode, [shown, result])
+    return demo
 
-        base_right = base_sim[0] > base_sim[1]
-        tuned_right = tuned_sim[0] > tuned_sim[1]
 
-        if mode == "Fine-tune wins" and not base_right and tuned_right:
-            break
-        elif mode == "Both fail" and not base_right and not tuned_right:
-            break
-        elif mode == "Both succeed" and base_right and tuned_right:
-            break
-        elif mode == "Random":
-            break
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Compare base and fine-tuned CLIP.")
+    parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)
+    parser.add_argument(
+        "--gallery",
+        type=Path,
+        default=Path("embeddings/clip-vit-base-patch32/test.pt"),
+    )
+    parser.add_argument("--images-dir", type=Path, default=Path("data/coco/val2017"))
+    parser.add_argument("--sugarcrepe-dir", type=Path, default=Path("data/sugarcrepe"))
+    default_device = "mps" if torch.backends.mps.is_available() else "cpu"
+    parser.add_argument("--device", default=default_device)
+    return parser.parse_args()
 
-    base_correct = "Pass ✅" if base_right else "Fail ❌"
-    tuned_correct = "Pass ✅" if tuned_right else "Fail ❌"
 
-    results = f"""### Correct caption
-"{caption}"
-
-### Hard negative (swapped)
-"{negative}"
-
-### Scores
-| Model | Correct caption | Negative caption | Verdict |
-|-------|----------------|-----------------|---------|
-| Base CLIP | {base_sim[0].item():.4f} | {base_sim[1].item():.4f} | {base_correct} |
-| Fine-tuned | {tuned_sim[0].item():.4f} | {tuned_sim[1].item():.4f} | {tuned_correct} |
-"""
-    return image, results
-
-with gr.Blocks(title="CLIP-CompSearch") as demo:
-    with gr.Tab("Search"):
-        gr.Markdown("# CLIP-CompSearch")
-        gr.Markdown("A compositional image search engine that handles relational queries standard CLIP gets wrong.")
-        with gr.Row():
-            query = gr.Textbox(label="Search query", placeholder="a woman preparing pizza while a man watches", scale=4)
-            k_slider = gr.Slider(minimum=3, maximum=10, value=5, step=1, label="Results", scale=1)
-        btn = gr.Button("Search", variant="primary")
-        with gr.Row():
-            with gr.Column():
-                gr.Markdown("### Base CLIP")
-                base_gallery = gr.Gallery(show_label=False, columns=5, height=300)
-            with gr.Column():
-                gr.Markdown("### Fine-tuned CLIP (LoRA)")
-                tuned_gallery = gr.Gallery(show_label=False, columns=5, height=300)
-        btn.click(fn=search, inputs=[query, k_slider], outputs=[base_gallery, tuned_gallery])
-
-    with gr.Tab("Matching Test"):
-        gr.Markdown("# Compositional Matching")
-        gr.Markdown("SugarCrepe examples: does the model score the correct caption higher than the swapped one?")
-        with gr.Row():
-            mode = gr.Dropdown(choices=["Fine-tune wins", "Both fail", "Both succeed", "Random"], value="Fine-tune wins", label="Show")
-            match_btn = gr.Button("Next example", variant="primary")
-        with gr.Row():
-            match_image = gr.Image(label="Image", height=400)
-            match_results = gr.Markdown()
-        match_btn.click(fn=match_example, inputs=mode, outputs=[match_image, match_results])
-
-demo.launch()
+if __name__ == "__main__":
+    build_demo(_parse_args()).launch()

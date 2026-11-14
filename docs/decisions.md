@@ -119,6 +119,15 @@ Notes:
 | Table 2 | Paired differences B − base, C − base, C − B. Per-example values averaged over the 3 seeds, then a cluster bootstrap that resamples image IDs (10,000 resamples, seed 0, 95% percentile interval). SugarCrepe categories and their macro average share each resample. |
 | Run once | `src/eval/final_test.py` refuses to run if `results/test_results.json` exists, if `results/selection.json` is not committed, or if `src/` is dirty. Per-example outputs go to `results/test_results.npz`. |
 
+## Step 12: Publish (14 Nov 2026)
+
+| Decision | Choice | Reason |
+|---|---|---|
+| README | Claude drafts from the committed result files; Ömer edits | All numbers come from `results/`. The first version's numbers are removed, not quoted. |
+| Demo | Uses the arm C seed-0 adapter (committed to `checkpoints/hard_lr5e-04_seed0_epoch2.5`, same SHA-256 as in `results/test_results.json`) and the 5,000 val2017 images as gallery | The old demo used `checkpoints/lora_epoch5`, trained on val2017. |
+| Removed | `checkpoints/lora_epoch5`, `notebooks/` | Leaky setup or broken scripts; git history keeps them. |
+| Dependencies | `requirements.txt` with exact pins of the direct dependencies, checked by a clean-clone test | Readable; the test shows it is sufficient. |
+
 ## Open decisions
 
 - None.
