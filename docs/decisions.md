@@ -90,7 +90,21 @@ Estimate for 1 full 3-epoch run (441 steps per epoch, 6 validations, plus about 
 
 Approved by Ömer on 14 Nov 2026: worst case about 2.4 GPU-hours, about $2.70.
 
+## Step 9: Sweep outcome, seed 0 (14 Nov 2026)
+
+Logs: `results/runs/*_seed0.json`. Every checkpoint passed the R@1 guard (lowest R@1 0.345 against a guard of 0.290), so compositional accuracy decided.
+
+| Arm | Grid result (best checkpoint per learning rate: comp. acc. / R@1) | Rule actions | Chosen |
+|---|---|---|---|
+| C `hard` | 2e-5: 0.961 / 0.387 (3.0); 1e-4: 0.974 / 0.401 (3.0); 5e-4: 0.979 / 0.402 (2.5); 1e-3 (edge run): 0.973 / 0.386 (1.0) | Edge rule ran 1e-3 because 5e-4 was the upper edge; 1e-3 did not win. Best checkpoint is not the last one, so no extension. | lr 5e-4, 3 epochs |
+| B `inbatch` | 2e-5: 0.685 / 0.356 (0.5); 1e-4: 0.690 / 0.384 (0.5); 5e-4: 0.676 / 0.406 (2.5) | None: 1e-4 is inside the grid and its best checkpoint is the first one. | lr 1e-4, 3 epochs |
+
+Notes:
+- All arm B checkpoints are below base CLIP in validation compositional accuracy (0.652–0.690 against 0.721), so the rule picks its earliest checkpoint.
+- The top arm C checkpoints differ by about 0.2 points, about 1 standard error on 4,986 examples.
+- The epoch for each arm is chosen in step 10 from the seed-averaged metrics, with the same rule.
+
 ## Open decisions
 
-- None before the sweep.
+- None.
 - Where to cache the image embeddings and where to train (after the step 8 timing)

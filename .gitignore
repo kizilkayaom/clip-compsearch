@@ -36,4 +36,4 @@ annotations/
 train2017/
 val2017/
 data/negatives/
-runs/
+/runs/

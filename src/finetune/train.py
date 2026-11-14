@@ -185,6 +185,8 @@ def run_training(
         start_epoch, global_step = state["epoch"], state["global_step"]
         _restore_rng(state["rng"])
         log = json.loads(log_path.read_text())
+        if start_epoch >= config.epochs:
+            return log
         log["checkpoints"] = [
             c for c in log["checkpoints"] if c["epoch"] <= start_epoch
         ]

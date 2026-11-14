@@ -261,3 +261,12 @@ def test_resume_without_saved_state_starts_from_scratch(tmp_path: Path) -> None:
 
     straight_losses = [c["train_loss"] for c in straight["checkpoints"]]
     assert [c["train_loss"] for c in fresh["checkpoints"]] == straight_losses
+
+
+def test_resume_of_a_finished_run_leaves_the_log_unchanged(tmp_path: Path) -> None:
+    _run(tmp_path, "done", _config(epochs=1))
+    before = json.loads((tmp_path / "logs" / "done.json").read_text())
+
+    resumed = _run(tmp_path, "done", _config(epochs=1), resume=True)
+
+    assert resumed == before
