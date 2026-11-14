@@ -1,0 +1,84 @@
+{
+  "seed": 0,
+  "limit": null,
+  "caption_preprocessing": "collapse whitespace runs to one space and strip the ends",
+  "spacy_model": "en_core_web_sm-3.8.0",
+  "filter": {
+    "rule": "reject swaps joined by a coordinator or a symmetric relation",
+    "coordinators": [
+      "and",
+      "or"
+    ],
+    "symmetric_relations": [
+      "across from",
+      "alongside",
+      "beside",
+      "by",
+      "near",
+      "next to",
+      "opposite"
+    ]
+  },
+  "nli_model": "cross-encoder/nli-deberta-v3-small",
+  "nli_device": "mps:0",
+  "nli_use": "scores stored per pair, not used for filtering",
+  "nli_label_order": [
+    "contradiction",
+    "entailment",
+    "neutral"
+  ],
+  "train": {
+    "total_captions": 566741,
+    "noun_swaps": 550811,
+    "adjective_swaps": 3910,
+    "no_swap": 12020,
+    "rule_rejected": 52711,
+    "rule_rejected_by_relation": {
+      "across from": 44,
+      "alongside": 175,
+      "and": 29236,
+      "beside": 1168,
+      "by": 3198,
+      "near": 5458,
+      "next to": 13263,
+      "opposite": 2,
+      "or": 167
+    },
+    "kept_pairs": 502010,
+    "nli_entailment_in_kept": 187142,
+    "images": 113287,
+    "images_with_kept_pair": 113019,
+    "sha256": "4410ccc3c72d780cd3833f625b1a499ed304b9a3672f168f16519c95f176ede0",
+    "pairs_sha256": "19a0b405c0cd0560dd030be1a6c00c0f7c2a449c4423c91e936024cbe008cc56"
+  },
+  "val": {
+    "total_captions": 25012,
+    "noun_swaps": 24330,
+    "adjective_swaps": 181,
+    "no_swap": 501,
+    "rule_rejected": 2284,
+    "rule_rejected_by_relation": {
+      "across from": 2,
+      "alongside": 8,
+      "and": 1263,
+      "beside": 44,
+      "by": 146,
+      "near": 249,
+      "next to": 565,
+      "or": 7
+    },
+    "kept_pairs": 22227,
+    "nli_entailment_in_kept": 8258,
+    "images": 5000,
+    "images_with_kept_pair": 4986,
+    "sha256": "bfa6e3bb584196eb8626863bc14c046ac7f485808dbc7d6639441ae522964223",
+    "pairs_sha256": "8fc9246c8837e2e699e39e673c80d2e79718720a772e1099edbad50ce159aef6"
+  },
+  "grammar_sample": {
+    "source": "train",
+    "size": 100
+  },
+  "elapsed_seconds": 3756.4,
+  "git_commit": "85d318d993c52cd8d83959e36c607bb808c6a3a2",
+  "git_dirty": false
+}
