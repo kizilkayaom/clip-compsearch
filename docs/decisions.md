@@ -44,9 +44,18 @@ Each entry records a choice made before any test-set evaluation.
 | Sanity check | 100 seeded images per set, recomputed on CPU with batch size 1; tolerance 1e-4 max abs difference | Measured MPS vs CPU difference: up to 3.4e-05 on norms of 9.2–11.6. A swapped row gives a difference above 1e-2 (tested). |
 | Parallelism | 8 threads in the main process, with prefetch of the next batch | DataLoader worker processes ran at 33–57 images/s on macOS, against 132–143 images/s with threads. |
 
+## Step 6: Validation metrics and selection rule (14 Nov 2026)
+
+| Decision | Choice | Reason |
+|---|---|---|
+| Compositional accuracy | 1 caption per validation image with a kept pair (4,986 images), chosen with seed 0. Correct when cos(image, caption) > cos(image, negative); a tie counts as wrong. | Copies the SugarCrepe format without SugarCrepe data. |
+| Retrieval | Text-to-image Recall@1/5/10 over the 5,000 validation images and all 25,012 captions, matched by image ID. Ties count against the true image. | Same gallery size as the val2017 test. |
+| Text input | Truncate to 77 tokens | CLIP's text encoder has 77 positions. |
+| Selection rule | Consider only epochs (and learning rates) whose validation R@1 is at most 1 point below base CLIP. From those, choose the highest compositional accuracy. If none passes, choose the highest R@1 and report it. | Keeps retrieval while improving composition. Chosen before any training run. |
+| Known bias | The validation negatives come from the same generator as the training negatives, so compositional accuracy favours the hard-negative arm. | SugarCrepe in step 11 has no such bias. |
+
 ## Open decisions
 
-- Selection rule (step 6)
 - Logit scale: fixed or trainable (step 7)
 - Batch size and learning-rate grid (step 7)
 - Approval of the time and cost estimate (step 8)

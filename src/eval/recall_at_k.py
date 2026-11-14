@@ -1,30 +1,38 @@
+from collections.abc import Sequence
+
 import torch
 import torch.nn.functional as F
 
-def recall_at_k(image_embed, text_embed, K):
-    
-    if(image_embed.shape != text_embed.shape):
-        raise Exception("Matrix dimesion mismatch: Recall@K aborted.")
-    
-    text_embed = F.normalize(text_embed, p = 2, dim = 1)
-    image_embed = F.normalize(image_embed, p = 2, dim = 1)
 
-    similarity = torch.matmul(text_embed, image_embed.T)
-    k_count = 0
-    
-    for i in range(len(similarity)):
-        sorted_indices = torch.argsort(similarity[i], descending=True)
-        if(i in sorted_indices[:K]):
-            k_count += 1
-    
-    return (k_count / len(similarity))
+def caption_ranks(
+    text_features: torch.Tensor,
+    image_features: torch.Tensor,
+    caption_image_ids: Sequence[int],
+    image_ids: Sequence[int],
+    chunk_size: int = 4096,
+) -> torch.Tensor:
+    if len(caption_image_ids) != len(text_features):
+        raise ValueError(
+            f"{len(caption_image_ids)} caption image IDs "
+            f"but {len(text_features)} text rows"
+        )
+    row_of = {image_id: row for row, image_id in enumerate(image_ids)}
+    unknown = sorted(set(caption_image_ids) - row_of.keys())
+    if unknown:
+        raise ValueError(f"{len(unknown)} caption image IDs not in the gallery")
 
-# Test 1
-emb = torch.randn(5, 512)
-print("Perfect match R@1:", recall_at_k(emb, emb.clone(), 1))
+    targets = torch.tensor([row_of[image_id] for image_id in caption_image_ids])
+    texts = F.normalize(text_features.float(), dim=-1)
+    images = F.normalize(image_features.float(), dim=-1)
+    ranks = []
+    for start in range(0, len(texts), chunk_size):
+        scores = texts[start : start + chunk_size] @ images.T
+        true_scores = scores.gather(1, targets[start : start + chunk_size, None])
+        ranks.append((scores >= true_scores).sum(dim=1) - 1)
+    return torch.cat(ranks) if ranks else torch.empty(0, dtype=torch.long)
 
-# Test 2
-text_emb = emb.clone()
-text_emb[0] = emb[3]
-print("Broken pair R@1:", recall_at_k(emb, text_emb, 1))
-print("Broken pair R@5:", recall_at_k(emb, text_emb, 5))
+
+def recall_at_k(
+    ranks: torch.Tensor, ks: Sequence[int] = (1, 5, 10)
+) -> dict[int, float]:
+    return {k: int((ranks < k).sum()) / len(ranks) for k in ks}
